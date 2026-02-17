@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phone-store-api-dev
+  namespace: argocd
+spec:
+  project: team-a-project # ArgoCD RBAC restricts them to their namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: team-a-dev
+  source:
+    repoURL: 'https://github.com/YOUR_ORG/golden-helm-charts.git'
+    path: developer-template
+    targetRevision: HEAD
+    helm:
+      values: |
+        environment: dev
+        namespace: team-a-dev
+        image:
+          repository: 123456789012.dkr.ecr.us-east-1.amazonaws.com/phone-store-api
+          tag: 1.0.4-dev # <-- ArgoCD detects this change and deploys it!

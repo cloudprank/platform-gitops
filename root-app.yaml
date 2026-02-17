@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: developer-teams-appset
+  namespace: argocd
+spec:
+  generators:
+    # This automatically reads your developer repositories!
+    - git:
+        repoURL: https://github.com/YOUR_ORG/gitops-repo.git
+        revision: HEAD
+        directories:
+          - path: clusters/prod-cluster/teams/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/YOUR_ORG/golden-helm-chart.git
+        targetRevision: HEAD
+        path: .
+        helm:
+          # Injects the values specific to Team Alpha or Team Beta
+          valueFiles:
+            - https://raw.githubusercontent.com/YOUR_ORG/gitops-repo/main/{{path}}/values.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

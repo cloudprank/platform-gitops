@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: grafana-alloy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://grafana.github.io/helm-charts'
+    targetRevision: 0.1.0
+    chart: alloy
+    helm:
+      values: |
+        alloy:
+          configMap:
+            content: |-
+              // 1. KUBERNETES DISCOVERY
+              discovery.kubernetes "pods" { role = "pod" }
+              
+              discovery.relabel "pod_logs" {
+                targets = discovery.kubernetes.pods.targets
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label  = "namespace"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label  = "pod"
+                }
+              }
+
+              // 2. LOGS TO LOKI
+              loki.source.kubernetes "pods" {
+                targets    = discovery.relabel.pod_logs.output
+                forward_to = [loki.write.local.receiver]
+              }
+              loki.write "local" {
+                endpoint { url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push" }
+              }
+
+              // 3. TRACES TO TEMPO
+              otelcol.receiver.otlp "default" {
+                http { endpoint = "0.0.0.0:4318" }
+                output { traces = [otelcol.exporter.otlp.tempo.input] }
+              }
+              otelcol.exporter.otlp "tempo" {
+                client {
+                  endpoint = "tempo.observability.svc.cluster.local:4317"
+                  tls { insecure = true }
+                }
+              }
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: observability
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
