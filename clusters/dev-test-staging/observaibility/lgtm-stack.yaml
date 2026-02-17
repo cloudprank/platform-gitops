@@ -1,36 +1,34 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: lgtm-stack
+  name: prometheus-grafana
   namespace: argocd
 spec:
   project: default
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: observability
   source:
     repoURL: 'https://prometheus-community.github.io/helm-charts'
     targetRevision: 51.2.0
     chart: kube-prometheus-stack
-    # We are pulling the full stack. In production, you would add secondary 
-    # sources here for the Loki and Tempo Helm charts as well!
-  destination:
-    server: 'https://kubernetes.default.svc'
-    namespace: observability
+    helm:
+      values: |
+        grafana:
+          grafana.ini:
+            auth.generic_oauth:
+              enabled: true
+              name: "Company SSO"
+              client_id: "grafana"
+              # NOTE: In a true prod environment, use External Secrets to mount this securely!
+              client_secret: "keycloak-secret" 
+              auth_url: "https://keycloak.corp.internal.com/realms/internal/protocol/openid-connect/auth"
+              token_url: "https://keycloak.corp.internal.com/realms/internal/protocol/openid-connect/token"
+              api_url: "https://keycloak.corp.internal.com/realms/internal/protocol/openid-connect/userinfo"
+              role_attribute_path: "contains(groups[*], 'Dev_Team_Alpha') && 'Editor' || 'Viewer'"
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
-grafana:
-  grafana.ini:
-    auth.generic_oauth:
-      enabled: true
-      name: "Company SSO"
-      client_id: "grafana"
-      client_secret: "keycloak-secret"
-      auth_url: "https://keycloak.corp.com/realms/internal/protocol/openid-connect/auth"
-      token_url: "https://keycloak.corp.com/realms/internal/protocol/openid-connect/token"
-      api_url: "https://keycloak.corp.com/realms/internal/protocol/openid-connect/userinfo"
-      # This is the magic! It maps the AD Group to a Grafana Org Role
-      role_attribute_path: "contains(groups[*], 'Dev_Team_Alpha') && 'Editor' || 'Viewer'"
-
